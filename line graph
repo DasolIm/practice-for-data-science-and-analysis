@@ -1,0 +1,57 @@
+setwd("D:/!R/R 기초 CSV/Indian E-commerce website")
+
+ord_info <- fread("practics/List of Orders.csv") %>% tibble()
+ord_prd <- fread("practics/Order Details.csv") %>% tibble()
+cust_info <- fread("practics/Customer Segmentation.csv") %>% tibble()
+
+line_df <- ord_info %>% 
+  left_join(ord_prd) %>% 
+  mutate(ord_month = ord_dt %>% dmy %>% str_sub(1,7)) %>% 
+  group_by(ord_month) %>% 
+  summarise(rev = sum(ord_amt),
+            net = sum(ord_profit))
+
+line_df %>% 
+  e_charts(ord_month) %>% 
+  e_line(rev, name = "매출액", smooth = T) %>% 
+  e_theme("dark-fresh-cut")
+
+line_df %>% 
+  e_charts(ord_month) %>% 
+  e_line(rev, name = "매출액") %>% 
+  e_line(net, name = "이익") %>% 
+  e_color(color = c("skyblue", "pink") ,
+          background = "white")
+
+line_df_catg_1 <-  ord_info %>% 
+  left_join(ord_prd) %>% 
+  mutate(ord_month = ord_dt %>% dmy %>% str_sub(1,7)) %>% 
+  group_by(ord_month, catg_1) %>% 
+  summarise(rev = sum(ord_amt))
+
+line_df_catg_1 %>% 
+  group_by(catg_1) %>% 
+  e_chart(ord_month) %>% 
+  e_line(rev)
+
+line_df_catg_2 <-  ord_info %>% 
+  left_join(ord_prd) %>% 
+  mutate(ord_month = ord_dt %>% dmy %>% str_sub(1,7)) %>% 
+  group_by(ord_month, catg_2) %>% 
+  summarise(rev = sum(ord_amt))
+
+line_df_catg_2 %>% 
+  group_by(catg_2) %>% 
+  filter(catg_2 %in% c("Skirt", "Leggings", "Shirt")) %>% 
+  e_chart(ord_month) %>% 
+  e_line(rev) %>% 
+  e_color(color = c("lavender", "pink", "skyblue"),
+          background = "black")
+
+# 차트가 여러개일 때는
+e_arrange(chart1, chart2, chart3, chart4,
+          rows = 3, cols = 2)
+# 
+
+# html 페이지로 그래프를 저장해서 배포하고자 할 때
+viewer -> Export -> Save as Webpage 클릭 (오른 쪽 아래 창)
