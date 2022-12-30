@@ -1,0 +1,283 @@
+library(dplyr)
+library(stringr)
+library(data.table)
+library(lubridate)
+
+setwd("D:/!R/R 기초 CSV/Indian E-commerce website")
+
+ord_info <- fread("practics/List of Orders.csv") %>% tibble()
+ord_prd <- fread("practics/Order Details.csv") %>% tibble()
+cust_info <- fread("practics/Customer Segmentation.csv") %>% tibble()
+
+ord_prd %>% 
+  select(ord_cd, catg_1, ord_amt)
+
+ord_prd %>% 
+  select(ord_cd, catg_1, ord_amt) %>% 
+  group_by(ord_cd)
+
+# 단일 그룹핑
+ord_prd %>% 
+  filter(ord_cd %in% c('B-25601','B-25602')) %>% 
+  select(ord_cd, catg_1, ord_amt) %>% 
+  group_by(ord_cd) %>% 
+  summarise(sum_amt = sum(ord_amt) ,
+            n_prd = n() ,
+            avg_amt = mean(ord_amt))
+
+# 복합 그룹핑
+ord_prd %>% 
+  group_by(catg_1, catg_2) %>% 
+  summarise(sum_amt = sum(ord_amt) ,
+            n_prd = n() ,
+            avg_amt = mean(ord_amt) )
+
+# 다양한 집계
+ord_prd %>% 
+  group_by(catg_1) %>% 
+  summarise(sum_amt = sum(ord_amt) ,
+            n_row = n() ,
+            n_ord = n_distinct(ord_cd) ,
+            med_amt = median(ord_amt) ,
+            min_amt = min(ord_amt) ,
+            max_amt = max(ord_amt) ,
+            sd_amt = sd(ord_amt)
+             )
+
+# NA가 포함된 집계  
+cust_info %>% 
+  group_by(gender) %>% 
+  summarise(avg_tenure = mean(tenure, na.rm=T))
+
+#1 group | summarise
+cust_info %>% 
+  group_by(gender) %>% 
+  summarise(cust_n = n())
+
+#2 group | summarise | arrange
+cust_info %>% 
+  group_by(job) %>% 
+  summarise(cust_n = n()) %>% 
+  arrange(cust_n %>% desc)
+
+#3 group | summarise | arrange
+cust_info %>% 
+  group_by(gender, job) %>% 
+  summarise(cust_n = n()) %>% 
+  arrange(gender, job, cust_n %>% desc)
+
+#4 group | summarise | arrange
+cust_info %>% 
+  group_by(gender, married) %>% 
+  summarise(cust_n = n() ,
+            avg_age = mean(age) ) %>% 
+  arrange(gender, married %>% desc, cust_n %>% desc)
+
+#5 group | summarise | arrange
+cust_info %>% 
+  group_by(job) %>% 
+  summarise(cust_n = n() ,
+            avg_age = mean(age) ,
+            min_age = min(age) ,
+            max_age = max(age) ) %>% 
+  arrange(cust_n %>% desc)
+
+#6 group | summarise
+ord_prd %>% 
+  group_by(catg_1, catg_2) %>% 
+  summarise(revenue = sum(ord_amt))
+
+#7 group | summarise
+ord_prd %>%
+  group_by(catg_1, catg_2) %>% 
+  summarise(revenue = sum(ord_amt) ,
+            aov = mean(ord_amt) ) %>% 
+  arrange(aov %>% desc)
+
+#8 group | summarise | join | arrange
+ord_prd %>% 
+  group_by(ord_cd) %>% 
+  summarise(ord_rev = sum(ord_amt)) %>% 
+  left_join(ord_info) %>% 
+  group_by(cust_nm) %>% 
+  summarise(cust_rev = sum(ord_rev) ,
+            cust_rev_avg = mean(ord_rev) ,
+            cust_ord = n_distinct(ord_cd) ) %>% 
+  arrange(cust_rev %>% desc)
+
+#1 join | group | summarise | data.table | dcast
+ord_prd %>% 
+  left_join(ord_info) %>% 
+  group_by(catg_1, state) %>% 
+  summarise(rev = sum(ord_amt)) %>% 
+  data.table() %>% 
+  dcast.data.table(formula = state ~ catg_1 ,
+                   value.var = "rev" ,
+                   fun.aggregate = sum,
+                   fill = 0) %>% 
+             tibble()
+
+ord_prd %>% 
+  left_join(ord_info) %>% 
+  group_by(catg_1, state) %>% 
+  summarise(rev = sum(ord_amt)) %>% 
+  data.table() %>% 
+  dcast.data.table(state ~ catg_1 ,
+                   value.var = "rev" ,
+                   sum) %>% 
+              tibble()
+
+#2 join | mutate | group | summarise | data.table | dcast
+ord_prd %>% 
+  left_join(ord_info) %>% 
+  mutate(ord_ymd = ord_dt %>% dmy) %>% 
+  group_by(catg_1, ord_ymd) %>% 
+  summarise(rev = sum(ord_amt)) %>% 
+  data.table() %>% 
+  dcast(formula = ord_ymd ~ catg_1 ,
+                   value.var = "rev" ,
+                   fun.aggregate = sum ,
+                   fill = 0 ) %>% 
+               tibble()
+
+#3 join | mutate | group | summarise | data.table | dcast
+ord_prd %>% 
+  left_join(ord_info) %>% 
+  mutate(ord_ymd = ord_dt %>% dmy) %>% 
+  group_by(catg_1, ord_ymd) %>%
+  summarise(rev = sum(ord_amt)) %>% 
+  data.table() %>% 
+  dcast(catg_1 ~ ord_ymd, value.var = "rev", sum, fill = 0) %>% 
+  tibble()
+
+#4 join | mutate | group | summarise | dcast | melt
+ord_info %>% 
+  left_join(ord_prd) %>% 
+  left_join(cust_info) %>% 
+  mutate(ord_dow = ord_dt %>% dmy %>%  wday(label = T)) %>% 
+  group_by(gender, married, ord_dow) %>% 
+  summarise(rev = sum(ord_amt)) %>% 
+  data.table() %>% 
+  dcast(gender + married ~ ord_dow, value.var = "rev", sum, fill = 0) %>% 
+  arrange(gender, married %>% desc) %>% 
+  melt.data.table(id.vars = c ('gender', 'married')) %>% 
+  tibble()
+
+# How to see distribution of customers?
+cust_info %>%
+  group_by(gender, married, graduated, spend) %>% 
+  summarise(n = n()) %>% 
+  data.table() %>% 
+  dcast.data.table(gender + married + graduated ~ spend, value.var = "n", sum) %>% 
+  arrange(gender %>% desc, married %>% desc, graduated %>% desc) %>% 
+  select(gender, married, graduated, High, Average, Low)
+  
+# Which job group has the highest average order amount?
+cust_info %>% 
+  left_join(ord_info) %>% 
+  left_join(ord_prd) %>% 
+  select(job, ord_amt) %>% 
+  group_by(job) %>% 
+  summarise(avg_amt = mean(ord_amt) ,
+            sum_amt = sum(ord_amt)) %>% 
+  filter(job %>% nchar() > 1) %>% 
+  arrange(avg_amt %>% desc)
+
+# Which job group has the most orders?
+cust_info %>% 
+  left_join(ord_info) %>% 
+  left_join(ord_prd) %>% 
+  distinct(ord_cd, .keep_all = T) %>% 
+  select(job, ord_cd) %>% 
+  group_by(job) %>%
+  summarise(sum_cd = n()) %>% 
+  filter(job %>% nchar() > 1) %>%
+  arrange(sum_cd %>% desc)
+  
+# Among the jobs with the highest number of orders, is marriage significant?
+cust_info %>% 
+  left_join(ord_info) %>% 
+  left_join(ord_prd) %>% 
+  distinct(ord_cd, .keep_all = T) %>%
+  select(ord_cd, job, married) %>%
+  group_by(job, married) %>% 
+  summarise(sum_cd = n()) %>% 
+  filter(job %>% nchar() > 1,
+         married %>% nchar() > 1) %>% 
+  data.table() %>% 
+  dcast.data.table(job ~ married, value.var = "sum_cd", sum) %>% 
+  mutate(p_no = (No/ (No + Yes)) %>% round(2) ,
+         p_yes = 1 - p_no)
+
+# Among the jobs with the highest number of orders, is gender significant?
+cust_info %>% 
+  left_join(ord_info) %>% 
+  left_join(ord_prd) %>% 
+  distinct(ord_cd, .keep_all = T) %>%
+  select(ord_cd, job, gender) %>%
+  group_by(job, gender) %>% 
+  summarise(sum_cd = n()) %>% 
+  filter(job %>% nchar() > 1,
+         gender %>% nchar() > 1) %>% 
+  data.table() %>% 
+  dcast.data.table(job ~ gender, value.var = "sum_cd", sum) %>% 
+  mutate(p_female = (Female/ (Female + Male)) %>% round(2) ,
+         p_male = 1 - p_female) %>% 
+  arrange(p_female %>% desc)
+
+# Which job group has an average monthly order growth?
+cust_info %>% 
+  left_join(ord_info) %>% 
+  left_join(ord_prd) %>%
+  select(job, catg_1, ord_amt, ord_dt) %>%
+  mutate(ord_ym = ord_dt %>% dmy %>% substr(1,7)) %>% 
+  group_by(job, ord_ym) %>% 
+  summarise(avg_sales = sum(ord_amt) %>% round(0)) %>% 
+  filter(job %>% nchar() > 1) %>% 
+  data.table() %>% 
+  dcast.data.table(job ~ ord_ym, value.var = "avg_sales", sum)
+
+# 연령별로 선호하는 중분류 카테고리는 어떻게 분포되어 있는가?
+# 관점 1) 선호의 기준은 무엇인가?
+# 관점 2) 분포는 왜 보는가? 어떻게 보면 쉽게 볼 수 있을까?
+
+a <- cust_info %>% 
+  select(age, cust_nm) %>% 
+  left_join(ord_info %>% 
+              select(ord_cd, cust_nm)) %>% 
+  left_join(ord_prd %>% 
+              group_by(ord_cd, catg_2) %>% 
+              summarise(sales = sum(ord_amt))) %>% 
+  select(ord_cd, cust_nm, sales, age, catg_2) %>% 
+  mutate(age_group = ifelse ( age < 20, '10대' ,
+                     ifelse ( age < 30, '20대' ,
+                     ifelse ( age < 40, '30대' ,
+                     ifelse ( age < 50, '40대' ,
+                     ifelse ( age < 60, '50대' ,
+                     ifelse ( age < 70, '60대' ,
+                     ifelse ( age < 80, '70대' ,
+                     ifelse ( age < 90, '80대' , '기타'))))))))) %>% 
+  group_by(age_group, catg_2) %>% 
+  summarise( avg_sales = mean(sales) %>% round(0)) %>% 
+  data.table() %>% 
+  dcast.data.table(catg_2 ~ age_group, value.var = "avg_sales", sum)
+
+
+install.packages("clipr")
+library(clipr)
+
+a %>% write_clip()
+
+# 고객별 평균 구매주기 구하기
+ord_info %>% 
+  mutate(ord_ymd = ord_dt %>% dmy ()) %>% 
+  left_join(ord_prd) %>% 
+  group_by(cust_nm, ord_ymd) %>% 
+  summarise(sales = sum(ord_amt)) %>% 
+  mutate(prd_ymd = ord_ymd %>% lead , 
+         term = (prd_ymd - ord_ymd) %>% as.numeric) %>% 
+  summarise(cycle=term %>% mean(na.rm = T) ,
+            order=n()) %>% 
+  filter(!is.nan(cycle) , 
+         cust_nm %>% nchar() > 1) %>% 
+  arrange(order %>% desc, cycle)
